@@ -21,6 +21,12 @@ const router = createRouter({
       name: 'remote-work-request',
       component: () => import('@/views/RemoteWorkRequestView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/leave/request',
+      name: 'leave-request',
+      component: () => import('@/views/LeaveRequestView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

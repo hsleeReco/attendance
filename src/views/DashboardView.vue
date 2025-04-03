@@ -1,5 +1,24 @@
 <template>
   <div class="space-y-6">
+    <!-- User Profile Header -->
+    <div class="bg-white shadow rounded-lg">
+      <div class="px-4 py-3 sm:p-4">
+        <div class="flex items-center space-x-3">
+          <div class="flex-shrink-0">
+            <img
+              :src="authStore.user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + authStore.user?.user_metadata?.name"
+              :alt="authStore.user?.user_metadata?.name"
+              class="h-12 w-12 rounded-full"
+            />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">{{ authStore.user?.name }}</h2>
+            <p class="text-xs text-gray-400">{{ authStore.user?.email }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Status Banners -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div v-if="remoteWorkUsers.length > 0" class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
@@ -95,7 +114,7 @@
           <h3 class="text-lg leading-6 font-medium text-gray-900">근무 시간</h3>
           <div class="mt-2">
             <p v-if="hasCheckedOut" class="text-2xl font-semibold text-blue-600">
-              {{ calculateWorkHours() }}
+              {{ calculateWorkHours(todayAttendance) }}
             </p>
             <p v-else-if="hasCheckedIn" class="text-2xl font-semibold text-gray-600">계산 중</p>
             <p v-else class="text-2xl font-semibold text-gray-600">-</p>
@@ -108,7 +127,10 @@
     <div class="bg-white shadow rounded-lg">
       <div class="px-4 py-5 sm:p-6">
         <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">나의 재택근무 목록</h3>
-        <div class="overflow-x-auto">
+        <div v-if="myRemoteWorkRequests.length === 0" class="text-center py-4 text-gray-500">
+          재택근무 신청 내역이 없습니다.
+        </div>
+        <div v-else class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
@@ -153,24 +175,169 @@
         </div>
       </div>
     </div>
+
+    <!-- Pending Remote Work Requests for Approval -->
+    <div class="bg-white shadow rounded-lg">
+      <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">승인 대기 중인 재택근무</h3>
+        <div v-if="pendingRemoteWorkRequests.length === 0" class="text-center py-4 text-gray-500">
+          승인 대기 중인 재택근무 신청이 없습니다.
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">신청자</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="request in pendingRemoteWorkRequests" :key="request.id">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ formatDate(request.date) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ request.user?.name }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <div class="flex space-x-2">
+                    <button
+                      @click="approveRequest(request.id)"
+                      class="text-green-600 hover:text-green-900"
+                    >
+                      승인
+                    </button>
+                    <button
+                      @click="rejectRequest(request.id)"
+                      class="text-red-600 hover:text-red-900"
+                    >
+                      거절
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leave List -->
+    <div class="bg-white shadow rounded-lg">
+      <div class="px-4 py-5 sm:p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">나의 연차 목록</h3>
+          <div v-if="myLeaveRequests.length > 0" class="text-sm text-gray-900">
+            <div>총 사용: {{ formatTotalLeaveHours }}</div>
+            <div class="mt-1">
+              <span class="text-blue-600">연차: {{ formatLeaveHoursByType('annual') }}</span>
+              <span class="ml-4 text-red-600">병가: {{ formatLeaveHoursByType('sick') }}</span>
+              <span class="ml-4 text-gray-600">기타: {{ formatLeaveHoursByType('other') }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="myLeaveRequests.length === 0" class="text-center py-4 text-gray-500">
+          연차 신청 내역이 없습니다.
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">시간</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">유형</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="request in myLeaveRequests" :key="request.id">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ formatDate(request.start_datetime) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ formatTime(request.start_datetime) }} ~ {{ formatTime(request.end_datetime) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ getLeaveTypeText(request.type) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <button
+                    v-if="request.status === 'pending'"
+                    @click="cancelLeaveRequest(request.id)"
+                    class="text-red-600 hover:text-red-900"
+                  >
+                    취소
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attendance History -->
+    <div class="bg-white shadow rounded-lg">
+      <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">나의 출퇴근 기록</h3>
+        <div v-if="myAttendanceHistory.length === 0" class="text-center py-4 text-gray-500">
+          출퇴근 기록이 없습니다.
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">출근</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">퇴근</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">근무시간</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="record in myAttendanceHistory" :key="record.id">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ formatDate(record.check_in) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ formatTime(record.check_in) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ record.check_out ? formatTime(record.check_out) : '-' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ calculateWorkHours(record) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import type { Attendance, RemoteWork, Leave, User } from '@/lib/supabase'
 import { format, differenceInHours, differenceInMinutes } from 'date-fns'
+import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const todayAttendance = ref<Attendance | null>(null)
 const remoteWorkUsers = ref<User[]>([])
 const leaveUsers = ref<User[]>([])
 const myRemoteWorkRequests = ref<(RemoteWork & { approver: User })[]>([])
+const myLeaveRequests = ref<Leave[]>([])
+const myAttendanceHistory = ref<Attendance[]>([])
+const pendingRemoteWorkRequests = ref<(RemoteWork & { user: User })[]>([])
 
 const hasCheckedIn = ref(false)
 const hasCheckedOut = ref(false)
+
+const router = useRouter()
 
 const formatTime = (date: string | null | undefined) => {
   if (!date) return '-'
@@ -194,12 +361,71 @@ const getStatusText = (status: string) => {
   }
 }
 
-const calculateWorkHours = () => {
-  if (!todayAttendance.value?.check_in || !todayAttendance.value?.check_out) return '-'
-  const hours = differenceInHours(new Date(todayAttendance.value.check_out), new Date(todayAttendance.value.check_in))
-  const minutes = differenceInMinutes(new Date(todayAttendance.value.check_out), new Date(todayAttendance.value.check_in)) % 60
+const getLeaveTypeText = (type: string) => {
+  switch (type) {
+    case 'annual':
+      return '연차'
+    case 'sick':
+      return '병가'
+    case 'other':
+      return '기타'
+    default:
+      return type
+  }
+}
+
+const calculateWorkHours = (record: Attendance) => {
+  if (!record.check_in || !record.check_out) return '-'
+  const hours = differenceInHours(new Date(record.check_out), new Date(record.check_in))
+  const minutes = differenceInMinutes(new Date(record.check_out), new Date(record.check_in)) % 60
   return `${hours}시간 ${minutes}분`
 }
+
+const calculateLeaveHours = (request: Leave) => {
+  const start = new Date(request.start_datetime)
+  const end = new Date(request.end_datetime)
+  let hours = differenceInHours(end, start)
+  
+  // 점심시간(12:00-13:00)을 건너뛰는 경우
+  const startHour = start.getHours()
+  const endHour = end.getHours()
+  if (startHour <= 12 && endHour > 12) {
+    hours -= 1
+  }
+  
+  return hours
+}
+
+const formatLeaveHoursByType = (type: string) => {
+  const totalHours = myLeaveRequests.value.reduce((total, request) => {
+    if (request.type === type) {
+      return total + calculateLeaveHours(request)
+    }
+    return total
+  }, 0)
+
+  const days = Math.floor(totalHours / 8)
+  const hours = totalHours % 8
+
+  if (days > 0) {
+    return `${days}일 ${hours}시간`
+  }
+  return `${hours}시간`
+}
+
+const formatTotalLeaveHours = computed(() => {
+  const totalHours = myLeaveRequests.value.reduce((total, request) => {
+    return total + calculateLeaveHours(request)
+  }, 0)
+
+  const days = Math.floor(totalHours / 8)
+  const hours = totalHours % 8
+
+  if (days > 0) {
+    return `${days}일 ${hours}시간`
+  }
+  return `${hours}시간`
+})
 
 const checkIn = async () => {
   try {
@@ -217,6 +443,7 @@ const checkIn = async () => {
     if (error) throw error
     todayAttendance.value = data
     hasCheckedIn.value = true
+    await fetchMyAttendanceHistory()
   } catch (error) {
     console.error('Error checking in:', error)
   }
@@ -234,13 +461,14 @@ const checkOut = async () => {
     if (error) throw error
     todayAttendance.value = data
     hasCheckedOut.value = true
+    await fetchMyAttendanceHistory()
   } catch (error) {
     console.error('Error checking out:', error)
   }
 }
 
 const requestLeave = () => {
-  // TODO: Implement leave request
+  router.push('/leave/request')
 }
 
 const cancelRequest = async (requestId: string) => {
@@ -257,13 +485,27 @@ const cancelRequest = async (requestId: string) => {
   }
 }
 
+const cancelLeaveRequest = async (requestId: string) => {
+  try {
+    const { error } = await supabase
+      .from('leave')
+      .delete()
+      .eq('id', requestId)
+
+    if (error) throw error
+    await fetchMyLeaveRequests()
+  } catch (error) {
+    console.error('Error canceling leave request:', error)
+  }
+}
+
 const fetchTodayAttendance = async () => {
   try {
     const { data, error } = await supabase
       .from('attendance')
       .select('*')
       .eq('user_id', authStore.user?.id)
-      .gte('check_in', format(new Date(), 'yyyy-MM-dd'))
+      .gte('check_in', format(new Date(), 'yyyy-MM-dd 00:00:00'))
       .lte('check_in', format(new Date(), 'yyyy-MM-dd 23:59:59'))
       .single()
 
@@ -285,7 +527,7 @@ const fetchRemoteWorkUsers = async () => {
       .eq('date', format(new Date(), 'yyyy-MM-dd'))
 
     if (error) throw error
-    remoteWorkUsers.value = data.map((rw: any) => rw.users)
+    remoteWorkUsers.value = data.map((rw: { users: User }) => rw.users)
   } catch (error) {
     console.error('Error fetching remote work users:', error)
   }
@@ -297,11 +539,11 @@ const fetchLeaveUsers = async () => {
       .from('leave')
       .select('*, users(*)')
       .eq('status', 'approved')
-      .lte('start_date', format(new Date(), 'yyyy-MM-dd'))
-      .gte('end_date', format(new Date(), 'yyyy-MM-dd'))
+      .lte('start_datetime', format(new Date(), 'yyyy-MM-dd'))
+      .gte('end_datetime', format(new Date(), 'yyyy-MM-dd'))
 
     if (error) throw error
-    leaveUsers.value = data.map((l: any) => l.users)
+    leaveUsers.value = data.map((l: { users: User }) => l.users)
   } catch (error) {
     console.error('Error fetching leave users:', error)
   }
@@ -322,12 +564,93 @@ const fetchMyRemoteWorkRequests = async () => {
   }
 }
 
+const fetchMyLeaveRequests = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('leave')
+      .select('*')
+      .eq('user_id', authStore.user?.id)
+      .order('start_datetime', { ascending: false })
+
+    if (error) throw error
+    myLeaveRequests.value = data
+  } catch (error) {
+    console.error('Error fetching leave requests:', error)
+  }
+}
+
+const fetchMyAttendanceHistory = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('user_id', authStore.user?.id)
+      .order('check_in', { ascending: false })
+      .limit(10)
+
+    if (error) throw error
+    myAttendanceHistory.value = data
+  } catch (error) {
+    console.error('Error fetching attendance history:', error)
+  }
+}
+
+const approveRequest = async (requestId: string) => {
+  try {
+    const { error } = await supabase
+      .from('remote_work')
+      .update({ status: 'approved' })
+      .eq('id', requestId)
+
+    if (error) throw error
+    await Promise.all([
+      fetchPendingRemoteWorkRequests(),
+      fetchRemoteWorkUsers()
+    ])
+  } catch (error) {
+    console.error('Error approving request:', error)
+  }
+}
+
+const rejectRequest = async (requestId: string) => {
+  try {
+    const { error } = await supabase
+      .from('remote_work')
+      .update({ status: 'rejected' })
+      .eq('id', requestId)
+
+    if (error) throw error
+    await fetchPendingRemoteWorkRequests()
+  } catch (error) {
+    console.error('Error rejecting request:', error)
+  }
+}
+
+const fetchPendingRemoteWorkRequests = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('remote_work')
+      .select('*, user:users(*)')
+      .eq('approver_id', authStore.user?.id)
+      .eq('status', 'pending')
+      .order('date', { ascending: true })
+
+    if (error) throw error
+    pendingRemoteWorkRequests.value = data
+  } catch (error) {
+    console.error('Error fetching pending remote work requests:', error)
+  }
+}
+
 onMounted(async () => {
   await Promise.all([
     fetchTodayAttendance(),
     fetchRemoteWorkUsers(),
     fetchLeaveUsers(),
-    fetchMyRemoteWorkRequests()
+    fetchMyRemoteWorkRequests(),
+    fetchMyLeaveRequests(),
+    fetchMyAttendanceHistory(),
+    fetchPendingRemoteWorkRequests()
   ])
 })
 </script> 
