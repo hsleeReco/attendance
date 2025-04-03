@@ -305,7 +305,7 @@
                   {{ record.check_out ? formatTime(record.check_out) : '-' }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ formatWorkHours(record) }}
+                  {{ record.check_out ? formatWorkHours(record) : '-' }}
                 </td>
               </tr>
             </tbody>
