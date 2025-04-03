@@ -113,10 +113,9 @@
         <div class="px-4 py-5 sm:p-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900">근무 시간</h3>
           <div class="mt-2">
-            <p v-if="hasCheckedOut && todayAttendance" class="text-2xl font-semibold text-blue-600">
-              {{ calculateWorkHours(todayAttendance.check_in, todayAttendance.check_out) }}
+            <p v-if="hasCheckedIn" class="text-2xl font-semibold text-blue-600">
+              {{ todayWorkHours }}
             </p>
-            <p v-else-if="hasCheckedIn" class="text-2xl font-semibold text-gray-600">계산 중</p>
             <p v-else class="text-2xl font-semibold text-gray-600">-</p>
           </div>
         </div>
@@ -306,7 +305,7 @@
                   {{ record.check_out ? formatTime(record.check_out) : '-' }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ calculateWorkHours(record.check_in, record.check_out) }}
+                  {{ formatWorkHours(record) }}
                 </td>
               </tr>
             </tbody>
@@ -377,9 +376,9 @@ const getLeaveTypeText = (type: string) => {
   }
 }
 
-const calculateWorkHours = (checkIn: string, checkOut: string) => {
+const calculateWorkHours = (checkIn: string, checkOut: string | null = null) => {
   const start = dayjs(checkIn)
-  const end = dayjs(checkOut)
+  const end = checkOut ? dayjs(checkOut) : dayjs()
   
   let hours = end.diff(start, 'hour')
   const minutes = end.diff(start, 'minute') % 60
@@ -439,6 +438,16 @@ const formatTotalLeaveHours = computed(() => {
   }
   return `${hours}시간`
 })
+
+const todayWorkHours = computed(() => {
+  if (!todayAttendance.value?.check_in) return '-'
+  return calculateWorkHours(todayAttendance.value.check_in, todayAttendance.value.check_out)
+})
+
+const formatWorkHours = (record: Attendance) => {
+  if (!record.check_in) return '-'
+  return calculateWorkHours(record.check_in, record.check_out)
+}
 
 const checkIn = async () => {
   try {
