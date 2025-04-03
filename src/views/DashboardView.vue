@@ -6,8 +6,8 @@
         <div class="flex items-center space-x-3">
           <div class="flex-shrink-0">
             <img
-              :src="authStore.user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + authStore.user?.user_metadata?.name"
-              :alt="authStore.user?.user_metadata?.name"
+              :src="authStore.user?.avatar_url || 'https://ui-avatars.com/api/?name=' + authStore.user?.name"
+              :alt="authStore.user?.name"
               class="h-12 w-12 rounded-full"
             />
           </div>
@@ -113,7 +113,7 @@
         <div class="px-4 py-5 sm:p-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900">근무 시간</h3>
           <div class="mt-2">
-            <p v-if="hasCheckedOut" class="text-2xl font-semibold text-blue-600">
+            <p v-if="hasCheckedOut && todayAttendance" class="text-2xl font-semibold text-blue-600">
               {{ calculateWorkHours(todayAttendance) }}
             </p>
             <p v-else-if="hasCheckedIn" class="text-2xl font-semibold text-gray-600">계산 중</p>
@@ -152,9 +152,9 @@
                   <span
                     :class="{
                       'px-2 inline-flex text-xs leading-5 font-semibold rounded-full': true,
-                      'bg-yellow-100 text-yellow-800': request.status === 'pending',
-                      'bg-green-100 text-green-800': request.status === 'approved',
-                      'bg-red-100 text-red-800': request.status === 'rejected'
+                      'bg-yellow-100 text-yellow-800': request.status === 'PENDING',
+                      'bg-green-100 text-green-800': request.status === 'APPROVED',
+                      'bg-red-100 text-red-800': request.status === 'REJECTED'
                     }"
                   >
                     {{ getStatusText(request.status) }}
@@ -162,7 +162,7 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <button
-                    v-if="request.status === 'pending'"
+                    v-if="request.status.toUpperCase() === 'PENDING'"
                     @click="cancelRequest(request.id)"
                     class="text-red-600 hover:text-red-900"
                   >
@@ -263,7 +263,7 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <button
-                    v-if="request.status === 'pending'"
+                    v-if="request.status.toUpperCase() === 'PENDING'"
                     @click="cancelLeaveRequest(request.id)"
                     class="text-red-600 hover:text-red-900"
                   >
@@ -350,14 +350,14 @@ const formatDate = (date: string) => {
 
 const getStatusText = (status: string) => {
   switch (status) {
-    case 'pending':
-      return '대기 중'
-    case 'approved':
+    case 'PENDING':
+      return '대기중'
+    case 'APPROVED':
       return '승인됨'
-    case 'rejected':
+    case 'REJECTED':
       return '거절됨'
     default:
-      return status
+      return status.toUpperCase()
   }
 }
 
@@ -370,7 +370,7 @@ const getLeaveTypeText = (type: string) => {
     case 'other':
       return '기타'
     default:
-      return type
+      return type.toUpperCase()
   }
 }
 
@@ -523,7 +523,7 @@ const fetchRemoteWorkUsers = async () => {
     const { data, error } = await supabase
       .from('remote_work')
       .select('*, users(*)')
-      .eq('status', 'approved')
+      .eq('status', 'APPROVED')
       .eq('date', format(new Date(), 'yyyy-MM-dd'))
 
     if (error) throw error
@@ -538,7 +538,7 @@ const fetchLeaveUsers = async () => {
     const { data, error } = await supabase
       .from('leave')
       .select('*, users(*)')
-      .eq('status', 'approved')
+      .eq('status', 'APPROVED')
       .lte('start_datetime', format(new Date(), 'yyyy-MM-dd'))
       .gte('end_datetime', format(new Date(), 'yyyy-MM-dd'))
 
@@ -599,7 +599,7 @@ const approveRequest = async (requestId: string) => {
   try {
     const { error } = await supabase
       .from('remote_work')
-      .update({ status: 'approved' })
+      .update({ status: 'APPROVED' })
       .eq('id', requestId)
 
     if (error) throw error
@@ -616,7 +616,7 @@ const rejectRequest = async (requestId: string) => {
   try {
     const { error } = await supabase
       .from('remote_work')
-      .update({ status: 'rejected' })
+      .update({ status: 'REJECTED' })
       .eq('id', requestId)
 
     if (error) throw error
@@ -632,7 +632,7 @@ const fetchPendingRemoteWorkRequests = async () => {
       .from('remote_work')
       .select('*, user:users(*)')
       .eq('approver_id', authStore.user?.id)
-      .eq('status', 'pending')
+      .eq('status', 'PENDING')
       .order('date', { ascending: true })
 
     if (error) throw error

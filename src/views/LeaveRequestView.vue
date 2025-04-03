@@ -168,7 +168,7 @@ const submitRequest = async () => {
         start_time: date.startTime,
         end_time: endTime,
         type: leaveType.value,
-        status: 'pending'
+        status: 'PENDING'
       }
     })
 

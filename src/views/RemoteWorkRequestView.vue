@@ -84,7 +84,7 @@ const submitRequest = async () => {
           user_id: authStore.user?.id,
           approver_id: selectedApprover.value,
           date: selectedDate.value,
-          status: 'pending'
+          status: 'PENDING'
         }
       ])
 

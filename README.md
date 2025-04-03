@@ -69,7 +69,7 @@ npm run dev
 - user_id (uuid, foreign key to users.id)
 - approver_id (uuid, foreign key to users.id)
 - date (date)
-- status (text: 'pending', 'approved', 'rejected')
+- status (text: 'PENDING', 'APPROVED', 'REJECTED')
 - created_at (timestamp with time zone)
 
 ### leave
@@ -78,7 +78,7 @@ npm run dev
 - start_date (date)
 - end_date (date)
 - type (text: 'annual', 'sick', 'other')
-- status (text: 'pending', 'approved', 'rejected')
+- status (text: 'PENDING', 'APPROVED', 'REJECTED')
 - created_at (timestamp with time zone)
 
 ## Google Calendar API 설정
