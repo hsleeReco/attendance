@@ -77,7 +77,7 @@ npm run dev
 - user_id (uuid, foreign key to users.id)
 - start_date (date)
 - end_date (date)
-- type (text: 'annual', 'sick', 'other')
+- type (text: 'ANNUAL', 'SICK', 'OTHER')
 - status (text: 'PENDING', 'APPROVED', 'REJECTED')
 - created_at (timestamp with time zone)
 

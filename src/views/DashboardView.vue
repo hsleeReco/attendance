@@ -114,7 +114,7 @@
           <h3 class="text-lg leading-6 font-medium text-gray-900">근무 시간</h3>
           <div class="mt-2">
             <p v-if="hasCheckedOut && todayAttendance" class="text-2xl font-semibold text-blue-600">
-              {{ calculateWorkHours(todayAttendance) }}
+              {{ calculateWorkHours(todayAttendance.check_in, todayAttendance.check_out) }}
             </p>
             <p v-else-if="hasCheckedIn" class="text-2xl font-semibold text-gray-600">계산 중</p>
             <p v-else class="text-2xl font-semibold text-gray-600">-</p>
@@ -231,9 +231,9 @@
           <div v-if="myLeaveRequests.length > 0" class="text-sm text-gray-900">
             <div>총 사용: {{ formatTotalLeaveHours }}</div>
             <div class="mt-1">
-              <span class="text-blue-600">연차: {{ formatLeaveHoursByType('annual') }}</span>
-              <span class="ml-4 text-red-600">병가: {{ formatLeaveHoursByType('sick') }}</span>
-              <span class="ml-4 text-gray-600">기타: {{ formatLeaveHoursByType('other') }}</span>
+              <span class="text-blue-600">연차: {{ formatLeaveHoursByType('ANNUAL') }}</span>
+              <span class="ml-4 text-red-600">병가: {{ formatLeaveHoursByType('SICK') }}</span>
+              <span class="ml-4 text-gray-600">기타: {{ formatLeaveHoursByType('OTHER') }}</span>
             </div>
           </div>
         </div>
@@ -306,7 +306,7 @@
                   {{ record.check_out ? formatTime(record.check_out) : '-' }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ calculateWorkHours(record) }}
+                  {{ calculateWorkHours(record.check_in, record.check_out) }}
                 </td>
               </tr>
             </tbody>
@@ -322,8 +322,12 @@ import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import type { Attendance, RemoteWork, Leave, User } from '@/lib/supabase'
-import { format, differenceInHours, differenceInMinutes } from 'date-fns'
+import dayjs from 'dayjs'
+import 'dayjs/locale/ko'
 import { useRouter } from 'vue-router'
+
+// Set Korean locale
+dayjs.locale('ko')
 
 const authStore = useAuthStore()
 const todayAttendance = ref<Attendance | null>(null)
@@ -339,13 +343,12 @@ const hasCheckedOut = ref(false)
 
 const router = useRouter()
 
-const formatTime = (date: string | null | undefined) => {
-  if (!date) return '-'
-  return format(new Date(date), 'HH:mm')
+const formatTime = (date: string) => {
+  return dayjs(date).format('HH:mm')
 }
 
 const formatDate = (date: string) => {
-  return format(new Date(date), 'yyyy-MM-dd')
+  return dayjs(date).format('YYYY-MM-DD')
 }
 
 const getStatusText = (status: string) => {
@@ -363,9 +366,9 @@ const getStatusText = (status: string) => {
 
 const getLeaveTypeText = (type: string) => {
   switch (type) {
-    case 'annual':
+    case 'ANNUAL':
       return '연차'
-    case 'sick':
+    case 'SICK':
       return '병가'
     case 'other':
       return '기타'
@@ -374,21 +377,31 @@ const getLeaveTypeText = (type: string) => {
   }
 }
 
-const calculateWorkHours = (record: Attendance) => {
-  if (!record.check_in || !record.check_out) return '-'
-  const hours = differenceInHours(new Date(record.check_out), new Date(record.check_in))
-  const minutes = differenceInMinutes(new Date(record.check_out), new Date(record.check_in)) % 60
+const calculateWorkHours = (checkIn: string, checkOut: string) => {
+  const start = dayjs(checkIn)
+  const end = dayjs(checkOut)
+  
+  let hours = end.diff(start, 'hour')
+  const minutes = end.diff(start, 'minute') % 60
+  
+  // 점심시간(12:00-13:00)을 건너뛰는 경우
+  const startHour = start.hour()
+  const endHour = end.hour()
+  if (startHour <= 12 && endHour > 12) {
+    hours -= 1
+  }
+  
   return `${hours}시간 ${minutes}분`
 }
 
 const calculateLeaveHours = (request: Leave) => {
-  const start = new Date(request.start_datetime)
-  const end = new Date(request.end_datetime)
-  let hours = differenceInHours(end, start)
+  const start = dayjs(request.start_datetime)
+  const end = dayjs(request.end_datetime)
+  let hours = end.diff(start, 'hour')
   
   // 점심시간(12:00-13:00)을 건너뛰는 경우
-  const startHour = start.getHours()
-  const endHour = end.getHours()
+  const startHour = start.hour()
+  const endHour = end.hour()
   if (startHour <= 12 && endHour > 12) {
     hours -= 1
   }
@@ -501,12 +514,13 @@ const cancelLeaveRequest = async (requestId: string) => {
 
 const fetchTodayAttendance = async () => {
   try {
+    const today = dayjs().format('YYYY-MM-DD')
     const { data, error } = await supabase
       .from('attendance')
       .select('*')
       .eq('user_id', authStore.user?.id)
-      .gte('check_in', format(new Date(), 'yyyy-MM-dd 00:00:00'))
-      .lte('check_in', format(new Date(), 'yyyy-MM-dd 23:59:59'))
+      .gte('check_in', `${today} 00:00:00`)
+      .lte('check_in', `${today} 23:59:59`)
       .single()
 
     if (error && error.code !== 'PGRST116') throw error
@@ -520,11 +534,12 @@ const fetchTodayAttendance = async () => {
 
 const fetchRemoteWorkUsers = async () => {
   try {
+    const today = dayjs().format('YYYY-MM-DD')
     const { data, error } = await supabase
       .from('remote_work')
       .select('*, users(*)')
       .eq('status', 'APPROVED')
-      .eq('date', format(new Date(), 'yyyy-MM-dd'))
+      .eq('date', today)
 
     if (error) throw error
     remoteWorkUsers.value = data.map((rw: { users: User }) => rw.users)
@@ -535,12 +550,13 @@ const fetchRemoteWorkUsers = async () => {
 
 const fetchLeaveUsers = async () => {
   try {
+    const today = dayjs().format('YYYY-MM-DD')
     const { data, error } = await supabase
       .from('leave')
       .select('*, users(*)')
       .eq('status', 'APPROVED')
-      .lte('start_datetime', format(new Date(), 'yyyy-MM-dd'))
-      .gte('end_datetime', format(new Date(), 'yyyy-MM-dd'))
+      .lte('start_datetime', today)
+      .gte('end_datetime', today)
 
     if (error) throw error
     leaveUsers.value = data.map((l: { users: User }) => l.users)
