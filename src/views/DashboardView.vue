@@ -342,7 +342,8 @@ const hasCheckedOut = ref(false)
 
 const router = useRouter()
 
-const formatTime = (date: string) => {
+const formatTime = (date: string | null | undefined) => {
+  if(date == null) return "-";
   return dayjs(date).format('HH:mm')
 }
 
